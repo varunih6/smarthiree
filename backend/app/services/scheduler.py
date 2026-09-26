@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Application, AvailabilitySlot, Role, Status, User
 from .audit import audit
+from .meeting_service import create_interview_meeting
 from .scoring import notify_candidate
 
 
@@ -21,23 +22,55 @@ def _load(db: Session, interviewer_id: int) -> int:
         Application.status == Status.INTERVIEW_SCHEDULED).count()
 
 
-def book(db: Session, app: Application, slot: AvailabilitySlot, actor: User | None, mode: str):
-    # free a previous slot if re-scheduling
+def book(
+    db: Session,
+    app: Application,
+    slot: AvailabilitySlot,
+    actor: User | None,
+    mode: str,
+):
+    # Free a previous slot if re-scheduling.
     if app.interview_slot_id:
         old = db.get(AvailabilitySlot, app.interview_slot_id)
+
         if old and old.id != slot.id:
-            old.is_booked, old.application_id = False, None
-    slot.is_booked, slot.application_id = True, app.id
+            old.is_booked = False
+            old.application_id = None
+
+    # Book the new slot.
+    slot.is_booked = True
+    slot.application_id = app.id
+
+    # Assign interview details.
     app.interviewer_id = slot.interviewer_id
     app.interview_at = slot.start
     app.interview_slot_id = slot.id
     app.scheduled_by = mode
     app.status = Status.INTERVIEW_SCHEDULED
+
+    # Generate a meeting link only on the first scheduling.
+    # The same link is preserved if the interview is rescheduled.
+    if not app.interview_link:
+        app.interview_link = create_interview_meeting(app.id)
+
     interviewer = db.get(User, slot.interviewer_id)
-    audit(db, actor, "INTERVIEW_SCHEDULED", "application", app.id,
-          f"{app.candidate.full_name} with {interviewer.full_name} at "
-          f"{slot.start:%d %b %Y %H:%M} ({mode})")
-    notify_candidate(app, f"Interview scheduled on {slot.start:%d %b %Y, %I:%M %p}")
+
+    audit(
+        db,
+        actor,
+        "INTERVIEW_SCHEDULED",
+        "application",
+        app.id,
+        f"{app.candidate.full_name} with "
+        f"{interviewer.full_name} at "
+        f"{slot.start:%d %b %Y %H:%M} ({mode})",
+    )
+
+    notify_candidate(
+        app,
+        f"Interview scheduled on "
+        f"{slot.start:%d %b %Y, %I:%M %p}"
+    )
 
 
 def auto_schedule(db: Session, actor: User, jd_id: int | None = None) -> dict:

@@ -153,6 +153,7 @@ class Application(Base):
     interviewer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     interview_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     interview_slot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    interview_link: Mapped[str | None] = mapped_column(String(500),nullable=True)
     scheduled_by: Mapped[str | None] = mapped_column(String(20), nullable=True)  # auto|manual
     interview_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-100
     interviewer_decision: Mapped[str | None] = mapped_column(String(20), nullable=True)

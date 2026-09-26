@@ -89,28 +89,54 @@ def app_summary(a: Application) -> dict:
 def app_detail(a: Application, for_interviewer: bool = False) -> dict:
     d = app_summary(a)
     d.update({
-        "candidate": user_view(a.candidate),
-        "jd": jd_view(a.jd, admin=not for_interviewer),
-        "resume_text": a.resume_snapshot,
-        "matched_skills": a.matched_skills or [], "gaps": a.gaps or [],
-        "resume_summary": a.resume_summary, "resume_source": a.resume_source,
-        "assessment_started_at": iso(a.assessment_started_at),
-        "assessment_submitted_at": iso(a.assessment_submitted_at),
-        "answers": [{
-            "order": x.order + 1, "question": x.question.text,
-            "rubric": question_view(x.question)["rubric"],
-            "answer": x.answer_text, "time_taken_sec": x.time_taken_sec,
-            "time_limit_sec": x.question.time_limit_sec, "timed_out": x.timed_out,
-            "score": x.score, "justification": x.justification, "confidence": x.confidence,
-            "rubric_hits": x.rubric_hits or [], "source": x.source,
-            "submitted": x.submitted_at is not None,
-        } for x in a.answers],
-        "evaluations": [evaluation_view(e) for e in a.evaluations],
-        "notes": [{"id": n.id, "author": n.author.full_name, "role": n.author.role,
-                   "text": n.text, "created_at": iso(n.created_at)} for n in a.notes],
-        "next_steps": a.next_steps,
-        "decided_at": iso(a.decided_at), "responded_at": iso(a.responded_at),
+    "candidate": user_view(a.candidate),
+    "jd": jd_view(a.jd, admin=not for_interviewer),
+    "resume_text": a.resume_snapshot,
+    "matched_skills": a.matched_skills or [],
+    "gaps": a.gaps or [],
+    "resume_summary": a.resume_summary,
+    "resume_source": a.resume_source,
+
+    "assessment_started_at": iso(a.assessment_started_at),
+    "assessment_submitted_at": iso(a.assessment_submitted_at),
+
+    "interviewer": user_view(a.interviewer) if a.interviewer else None,
+    "interview_at": iso(a.interview_at),
+    "interview_slot_id": a.interview_slot_id,
+    "interview_link": a.interview_link,
+    "scheduled_by": a.scheduled_by,
+
+    "answers": [{
+        "order": x.order + 1,
+        "question": x.question.text,
+        "rubric": question_view(x.question)["rubric"],
+        "answer": x.answer_text,
+        "time_taken_sec": x.time_taken_sec,
+        "time_limit_sec": x.question.time_limit_sec,
+        "timed_out": x.timed_out,
+        "score": x.score,
+        "justification": x.justification,
+        "confidence": x.confidence,
+        "rubric_hits": x.rubric_hits or [],
+        "source": x.source,
+        "submitted": x.submitted_at is not None,
+    } for x in a.answers],
+
+    "evaluations": [evaluation_view(e) for e in a.evaluations],
+
+    "notes": [{
+        "id": n.id,
+        "author": n.author.full_name,
+        "role": n.author.role,
+        "text": n.text,
+        "created_at": iso(n.created_at)
+    } for n in a.notes],
+
+    "next_steps": a.next_steps,
+    "decided_at": iso(a.decided_at),
+    "responded_at": iso(a.responded_at),
     })
+
     if not for_interviewer:
         d["telemetry"] = {"tab_switches": a.tab_switches, "paste_events": a.paste_events,
                           "copy_events": a.copy_events, "fullscreen_exits": a.fullscreen_exits,
@@ -121,41 +147,138 @@ def app_detail(a: Application, for_interviewer: bool = False) -> dict:
 def candidate_app_view(a: Application) -> dict:
     """What the candidate sees: status + dates. No AI scores or reasons."""
     label, message = CANDIDATE_STATUS.get(a.status, (a.status, ""))
-    timeline = [{"label": "Applied", "date": iso(a.created_at), "done": True}]
+
+    timeline = [
+        {
+            "label": "Applied",
+            "date": iso(a.created_at),
+            "done": True,
+        }
+    ]
+
     if a.status == Status.FILTERED:
-        timeline.append({"label": "Not shortlisted", "date": iso(a.updated_at), "done": True, "bad": True})
+        timeline.append({
+            "label": "Not shortlisted",
+            "date": iso(a.updated_at),
+            "done": True,
+            "bad": True,
+        })
+
     elif a.status != Status.APPLIED:
-        timeline.append({"label": "Shortlisted for Assessment", "date": None, "done": True})
-        timeline.append({"label": "Assessment Completed", "date": iso(a.assessment_submitted_at),
-                         "done": a.assessment_submitted_at is not None})
-        reached_interview = a.status in (Status.INTERVIEW_PENDING, Status.INTERVIEW_SCHEDULED,
-                                         Status.INTERVIEW_COMPLETED, Status.OFFERED,
-                                         Status.OFFER_ACCEPTED, Status.OFFER_DECLINED) or a.interview_at
-        timeline.append({"label": "Shortlisted for Interview", "date": None, "done": bool(reached_interview)})
-        timeline.append({"label": "Interview Scheduled", "date": iso(a.interview_at),
-                         "done": a.interview_at is not None})
+        timeline.append({
+            "label": "Shortlisted for Assessment",
+            "date": None,
+            "done": True,
+        })
+
+        timeline.append({
+            "label": "Assessment Completed",
+            "date": iso(a.assessment_submitted_at),
+            "done": a.assessment_submitted_at is not None,
+        })
+
+        reached_interview = (
+            a.status in (
+                Status.INTERVIEW_PENDING,
+                Status.INTERVIEW_SCHEDULED,
+                Status.INTERVIEW_COMPLETED,
+                Status.OFFERED,
+                Status.OFFER_ACCEPTED,
+                Status.OFFER_DECLINED,
+            )
+            or a.interview_at is not None
+        )
+
+        timeline.append({
+            "label": "Shortlisted for Interview",
+            "date": None,
+            "done": bool(reached_interview),
+        })
+
+        timeline.append({
+            "label": "Interview Scheduled",
+            "date": iso(a.interview_at),
+            "done": a.interview_at is not None,
+        })
+
         if a.final_decision:
-            timeline.append({"label": {"OFFER": "Offer Released", "REJECT": "Rejected",
-                                       "HOLD": "On Hold"}[a.final_decision],
-                             "date": iso(a.decided_at), "done": True, "bad": a.final_decision == "REJECT"})
+            timeline.append({
+                "label": {
+                    "OFFER": "Offer Released",
+                    "REJECT": "Rejected",
+                    "HOLD": "On Hold",
+                }[a.final_decision],
+                "date": iso(a.decided_at),
+                "done": True,
+                "bad": a.final_decision == "REJECT",
+            })
+
         elif a.status == Status.REJECTED:
-            timeline.append({"label": "Rejected", "date": iso(a.updated_at), "done": True, "bad": True})
+            timeline.append({
+                "label": "Rejected",
+                "date": iso(a.updated_at),
+                "done": True,
+                "bad": True,
+            })
+
         else:
-            timeline.append({"label": "Final Decision", "date": None, "done": False})
+            timeline.append({
+                "label": "Final Decision",
+                "date": None,
+                "done": False,
+            })
+
         if a.candidate_response:
-            timeline.append({"label": f"Offer {a.candidate_response.title()}", "date": iso(a.responded_at),
-                             "done": True, "bad": a.candidate_response == "DECLINED"})
+            timeline.append({
+                "label": f"Offer {a.candidate_response.title()}",
+                "date": iso(a.responded_at),
+                "done": True,
+                "bad": a.candidate_response == "DECLINED",
+            })
+
     return {
-        "id": a.id, "jd_id": a.jd_id, "jd_title": a.jd.title, "location": a.jd.location,
-        "status": a.status, "status_label": label, "status_message": message,
-        "applied_at": iso(a.created_at), "updated_at": iso(a.updated_at),
-        "can_take_assessment": a.status in (Status.SCREENING, Status.ASSESSMENT_IN_PROGRESS),
-        "interview": ({"at": iso(a.interview_at),
-                       "interviewer": a.interviewer.full_name if a.interviewer else None,
-                       "mode": "Online (video call link will be shared)"}
-                      if a.interview_at and a.status == Status.INTERVIEW_SCHEDULED else None),
+        "id": a.id,
+        "jd_id": a.jd_id,
+        "jd_title": a.jd.title,
+        "location": a.jd.location,
+
+        "status": a.status,
+        "status_label": label,
+        "status_message": message,
+
+        "applied_at": iso(a.created_at),
+        "updated_at": iso(a.updated_at),
+
+        "can_take_assessment": a.status in (
+            Status.SCREENING,
+            Status.ASSESSMENT_IN_PROGRESS,
+        ),
+
+        "interview": (
+            {
+                "at": iso(a.interview_at),
+                "interviewer": (
+                    a.interviewer.full_name
+                    if a.interviewer
+                    else None
+                ),
+                "mode": "Online",
+                "link": a.interview_link,
+            }
+            if (
+                a.interview_at
+                and a.status == Status.INTERVIEW_SCHEDULED
+            )
+            else None
+        ),
+
         "can_respond_offer": a.status == Status.OFFERED,
-        "has_offer_letter": a.status in (Status.OFFERED, Status.OFFER_ACCEPTED),
+
+        "has_offer_letter": a.status in (
+            Status.OFFERED,
+            Status.OFFER_ACCEPTED,
+        ),
+
         "timeline": timeline,
     }
 

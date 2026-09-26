@@ -151,8 +151,27 @@ export function InterviewDetail() {
     <>
       <Link to="/interviewer" className="back-link">← Assigned interviews</Link>
       <div className="page-head">
-        <div><h1>{a.candidate_name}</h1><p className="muted">{a.jd_title} · {fmtDateTime(a.interview_at)}</p></div>
-        <div className="page-actions"><StatusBadge status={a.status} /></div>
+        <div>
+          <h1>{a.candidate_name}</h1>
+          <p className="muted">
+            {a.jd_title} · {fmtDateTime(a.interview_at)}
+          </p>
+        </div>
+
+        <div className="page-actions">
+          <StatusBadge status={a.status} />
+
+          {a.interview_link && (
+            <a
+              href={a.interview_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary"
+            >
+              Join Interview
+            </a>
+          )}
+        </div>
       </div>
 
       <div className="detail-grid">

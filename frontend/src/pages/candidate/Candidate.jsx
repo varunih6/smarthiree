@@ -57,7 +57,23 @@ export function CandidateDashboard() {
                 )}
                 {a.interview && (
                   <div className="cta-box violet">
-                    <div><b>📅 {fmtDateTime(a.interview.at)}</b><div className="muted small">Interviewer: {a.interview.interviewer} · {a.interview.mode}</div></div>
+                    <div>
+                      <b>📅 {fmtDateTime(a.interview.at)}</b>
+                      <div className="muted small">
+                        Interviewer: {a.interview.interviewer} · {a.interview.mode}
+                      </div>
+                    </div>
+
+                    {a.interview.link && (
+                      <a
+                        href={a.interview.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-primary"
+                      >
+                        Join Interview
+                      </a>
+                    )}
                   </div>
                 )}
                 {a.can_respond_offer && (
